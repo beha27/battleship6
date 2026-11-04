@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Морской Бой 10x10 (PvE & PvP)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col items-center justify-center p-2 sm:p-4 font-sans">
+
+    <!-- Главный контейнер -->
+    <div class="max-w-4xl w-full bg-slate-800 rounded-xl p-4 sm:p-6 shadow-2xl border border-slate-700">
+        <h1 class="text-2xl sm:text-3xl font-bold text-center text-cyan-400 mb-1">⚔️ Морской Бой 10×10</h1>
+        <p class="text-center text-slate-400 text-xs sm:text-sm mb-4">Флот: 4, 3, 2, 1 палуба (по 1 кораблю каждого вида)</p>
+
+        <!-- Меню выбора режима -->
+        <div id="modeSelection" class="flex flex-col gap-3 mb-4 max-w-md mx-auto">
+            <button onclick="selectMode('pve')" class="w-full py-3 bg-cyan-600 hover:bg-cyan-500 font-semibold rounded-lg transition">🤖 Играть против бота</button>
+            <div class="flex gap-2">
+                <button onclick="createRoom()" class="w-1/2 py-3 bg-indigo-600 hover:bg-indigo-500 font-semibold rounded-lg transition text-sm sm:text-base">📡 Создать комнату (PvP)</button>
+                <button onclick="showJoinInput()" class="w-1/2 py-3 bg-emerald-600 hover:bg-emerald-500 font-semibold rounded-lg transition text-sm sm:text-base">🔗 Войти в комнату</button>
+            </div>
+        </div>
+
+        <!-- Панель подключения PvP -->
+        <div id="pvpPanel" class="hidden bg-slate-900 p-4 rounded-lg mb-4 border border-slate-700 max-w-md mx-auto">
+            <div id="hostInfo" class="hidden">
+                <p class="text-xs text-slate-400">Код вашей комнаты (передайте другу):</p>
+                <div class="flex gap-2 mt-1">
+                    <input type="text" id="myPeerId" readonly class="w-full bg-slate-800 text-cyan-300 font-mono text-center p-2 rounded border border-slate-600 select-all">
+                </div>
+            </div>
+            <div id="joinInfo" class="hidden">
+                <p class="text-xs text-slate-400 mb-1">Введите код комнаты соперника:</p>
+                <div class="flex gap-2">
+                    <input type="text" id="targetPeerId" placeholder="Код комнаты..." class="w-full bg-slate-800 text-white p-2 rounded border border-slate-600 focus:outline-none focus:border-cyan-500">
+                    <button onclick="joinRoom()" class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded font-semibold text-sm">Подключиться</button>
+                </div>
+            </div>
+            <p id="netStatus" class="text-xs text-yellow-400 mt-2 text-center"></p>
+        </div>
+
+        <!-- Статус игры / Инструкции -->
+        <div id="status" class="text-center font-bold text-base sm:text-lg text-emerald-400 mb-4 h-8 flex items-center justify-center">
+            Выберите режим игры
+        </div>
+
+        <!-- Экран расстановки кораблей -->
+        <div id="placementScreen" class="hidden flex flex-col items-center mb-6">
+            <div class="flex flex-wrap justify-center items-center gap-3 mb-4 bg-slate-900 p-3 rounded-lg border border-slate-700 w-full">
+                <span class="text-xs sm:text-sm text-slate-300 font-medium">Текущий корабль: <b id="currentShipInfo" class="text-cyan-400">4-палубный</b></span>
+                <button onclick="rotateShip()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-xs sm:text-sm rounded border border-slate-500 font-semibold transition">
+                    🔄 Поворот (<span id="orientText">Горизонтально</span>)
+                </button>
+                <button onclick="autoPlacePlayer()" class="px-3 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-xs sm:text-sm rounded border border-slate-500 font-semibold transition">
+                    🎲 Авто-расстановка
+                </button>
+                <button onclick="resetPlacement()" class="px-3 py-1.5 bg-rose-800 hover:bg-rose-700 text-xs sm:text-sm rounded border border-slate-500 font-semibold transition">
+                    🧹 Сброс
+                </button>
+            </div>
+            
+            <div id="placementBoard" class="grid grid-cols-10 gap-1 bg-slate-700 p-2 rounded-lg border border-slate-600 select-none"></div>
+
+            <button id="startGameBtn" onclick="confirmPlacement()" class="hidden mt-4 px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg shadow-lg transition">
+                🚀 Готово! Начать бой
+            </button>
+        </div>
+
+        <!-- Поля боя -->
+        <div id="gameBoards" class="hidden flex flex-col lg:flex-row gap-6 justify-center items-center mb-6">
+            <!-- Поле игрока -->
+            <div class="flex flex-col items-center">
+                <h2 class="text-xs font-semibold mb-2 text-slate-400 uppercase tracking-wider">Ваш флот</h2>
+                <div id="playerBoard" class="grid grid-cols-10 gap-0.5 sm:gap-1 bg-slate-700 p-1.5 rounded-lg border border-slate-600"></div>
+            </div>
+            <!-- Поле соперника -->
+            <div class="flex flex-col items-center">
+                <h2 class="text-xs font-semibold mb-2 text-slate-400 uppercase tracking-wider">Флот соперника</h2>
+                <div id="enemyBoard" class="grid grid-cols-10 gap-0.5 sm:gap-1 bg-slate-700 p-1.5 rounded-lg border border-slate-600"></div>
+            </div>
+        </div>
+
+        <!-- Кнопки управления (в конце игры) -->
+        <div id="gameOverButtons" class="hidden flex justify-center gap-3">
+            <button id="restartBtn" onclick="restartGame()" class="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 font-semibold rounded-lg transition">
+                🔄 Реванш
+            </button>
+            <button onclick="returnToMenu()" class="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold rounded-lg transition">
+                🏠 В меню
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const SIZE = 10;
+        const SHIPS_CONFIG = [4, 3, 2, 1];
+
+        let gameMode = null;
+        let playerBoard = [], enemyBoard = [];
+        let playerHits = [], enemyHits = [];
+        let myTurn = false;
+        let gameOver = false;
+
+        let currentShipIdx = 0;
+        let isHorizontal = true;
+        let tempPlayerBoard = [];
+        let readyForPvP = false;
+
+        let peer = null;
+        let conn = null;
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'hit') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(140, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.3);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            } else if (type === 'miss') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(450, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(120, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+            } else if (type === 'win') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.setValueAtTime(450, audioCtx.currentTime + 0.1);
+                osc.frequency.setValueAtTime(600, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+            }
+        }
+
+        function createEmptyBoard() {
+            return Array(SIZE).fill(null).map(() => Array(SIZE).fill(0));
+        }
+
+        function getShipCells(board, r, c) {
+            let visited = Array(SIZE).fill(null).map(() => Array(SIZE).fill(false));
+            let shipCells = [];
+            
+            function dfs(cr, cc) {
+                if (cr < 0 || cr >= SIZE || cc < 0 || cc >= SIZE || visited[cr][cc] || board[cr][cc] !== 1) return;
+                visited[cr][cc] = true;
+                shipCells.push({r: cr, c: cc});
+                dfs(cr + 1, cc);
+                dfs(cr - 1, cc);
+                dfs(cr, cc + 1);
+                dfs(cr, cc - 1);
+            }
+            
+            dfs(r, c);
+            return shipCells;
+        }
+
+        function isShipSunk(board, hits, r, c) {
+            let shipCells = getShipCells(board, r, c);
+            return shipCells.every(cell => hits[cell.r][cell.c] === 1);
+        }
+
+        function markSunkShipContour(board, hits, r, c) {
+            let shipCells = getShipCells(board, r, c);
+            shipCells.forEach(cell => {
+                for (let dr = -1; dr <= 1; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) {
+                        let nr = cell.r + dr;
+                        let nc = cell.c + dc;
+                        if (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE) {
+                            if (hits[nr][nc] === 0) {
+                                hits[nr][nc] = 2;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function startPlacement() {
+            tempPlayerBoard = createEmptyBoard();
+            currentShipIdx = 0;
+            isHorizontal = true;
+            document.getElementById('modeSelection').classList.add('hidden');
+            document.getElementById('pvpPanel').classList.add('hidden');
+            document.getElementById('gameBoards').classList.add('hidden');
+            document.getElementById('placementScreen').classList.remove('hidden');
+            document.getElementById('gameOverButtons').classList.add('hidden');
+            document.getElementById('status').textContent = 'Расставьте свои корабли (4, 3, 2 и 1 палуба)';
+            updatePlacementUI();
+        }
+
+        function rotateShip() {
+            isHorizontal = !isHorizontal;
+            document.getElementById('orientText').textContent = isHorizontal ? 'Горизонтально' : 'Вертикально';
+        }
+
+        function updatePlacementUI() {
+            const boardEl = document.getElementById('placementBoard');
+            boardEl.innerHTML = '';
+
+            const currentShipLen = SHIPS_CONFIG[currentShipIdx];
+            if (currentShipLen) {
+                document.getElementById('currentShipInfo').textContent = `${currentShipLen}-палубный (${currentShipIdx + 1} из ${SHIPS_CONFIG.length})`;
+                document.getElementById('startGameBtn').classList.add('hidden');
+            } else {
+                document.getElementById('currentShipInfo').textContent = 'Все 4 корабля расставлены!';
+                document.getElementById('startGameBtn').classList.remove('hidden');
+            }
+
+            for (let r = 0; r < SIZE; r++) {
+                for (let c = 0; c < SIZE; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = `w-7 h-7 sm:w-8 sm:h-8 border border-slate-600 rounded flex items-center justify-center font-bold text-xs select-none cursor-pointer transition ${
+                        tempPlayerBoard[r][c] === 1 ? 'bg-cyan-700 text-cyan-200 border-cyan-400' : 'bg-slate-800 hover:bg-slate-700'
+                    }`;
+                    if (tempPlayerBoard[r][c] === 1) cell.textContent = '🛳️';
+
+                    cell.onmouseenter = () => highlightShipPlacement(r, c, true);
+                    cell.onmouseleave = () => highlightShipPlacement(r, c, false);
+                    cell.onclick = () => tryPlaceShip(r, c);
+
+                    boardEl.appendChild(cell);
+                }
+            }
+        }
+
+        function canPlaceShip(board, r, c, len, horiz) {
+            for (let i = 0; i < len; i++) {
+                let nr = r + (horiz ? 0 : i);
+                let nc = c + (horiz ? i : 0);
+
+                if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) return false;
+
+                for (let dr = -1; dr <= 1; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) {
+                        let checkR = nr + dr;
+                        let checkC = nc + dc;
+                        if (checkR >= 0 && checkR < SIZE && checkC >= 0 && checkC < SIZE) {
+                            if (board[checkR][checkC] !== 0) return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
+        function highlightShipPlacement(r, c, isHover) {
+            if (currentShipIdx >= SHIPS_CONFIG.length) return;
+            const len = SHIPS_CONFIG[currentShipIdx];
+            const isValid = canPlaceShip(tempPlayerBoard, r, c, len, isHorizontal);
+
+            for (let i = 0; i < len; i++) {
+                let nr = r + (isHorizontal ? 0 : i);
+                let nc = c + (isHorizontal ? i : 0);
+
+                if (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE) {
+                    const idx = nr * SIZE + nc;
+                    const cell = document.getElementById('placementBoard').children[idx];
+                    if (cell && tempPlayerBoard[nr][nc] === 0) {
+                        if (isHover) {
+                            cell.classList.add(isValid ? 'bg-emerald-600' : 'bg-rose-600');
+                        } else {
+                            cell.classList.remove('bg-emerald-600', 'bg-rose-600');
+                        }
+                    }
+                }
+            }
+        }
+
+        function tryPlaceShip(r, c) {
+            if (currentShipIdx >= SHIPS_CONFIG.length) return;
+            const len = SHIPS_CONFIG[currentShipIdx];
+
+            if (canPlaceShip(tempPlayerBoard, r, c, len, isHorizontal)) {
+                for (let i = 0; i < len; i++) {
+                    let nr = r + (isHorizontal ? 0 : i);
+                    let nc = c + (isHorizontal ? i : 0);
+                    tempPlayerBoard[nr][nc] = 1;
+                }
+                currentShipIdx++;
+                updatePlacementUI();
+            }
+        }
+
+        function autoPlacePlayer() {
+            tempPlayerBoard = createEmptyBoard();
+            placeShipsRandomly(tempPlayerBoard);
+            currentShipIdx = SHIPS_CONFIG.length;
+            updatePlacementUI();
+        }
+
+        function resetPlacement() {
+            tempPlayerBoard = createEmptyBoard();
+            currentShipIdx = 0;
+            updatePlacementUI();
+        }
+
+        function placeShipsRandomly(board) {
+            for (let shipLen of SHIPS_CONFIG) {
+                let placed = false;
+                while (!placed) {
+                    let horiz = Math.random() < 0.5;
+                    let r = Math.floor(Math.random() * SIZE);
+                    let c = Math.floor(Math.random() * SIZE);
+
+                    if (canPlaceShip(board, r, c, shipLen, horiz)) {
+                        for (let i = 0; i < shipLen; i++) {
+                            let nr = r + (horiz ? 0 : i);
+                            let nc = c + (horiz ? i : 0);
+                            board[nr][nc] = 1;
+                        }
+                        placed = true;
+                    }
+                }
+            }
+        }
+
+        function confirmPlacement() {
+            playerBoard = tempPlayerBoard;
+            document.getElementById('placementScreen').classList.add('hidden');
+            document.getElementById('gameBoards').classList.remove('hidden');
+
+            if (gameMode === 'pve') {
+                enemyBoard = createEmptyBoard();
+                placeShipsRandomly(enemyBoard);
+                playerHits = createEmptyBoard();
+                enemyHits = createEmptyBoard();
+                myTurn = true;
+                gameOver = false;
+                document.getElementById('status').textContent = 'Ваш ход! Атакуйте флот бота.';
+                renderBoards();
+            } else if (gameMode.startsWith('pvp')) {
+                playerHits = createEmptyBoard();
+                enemyHits = createEmptyBoard();
+                gameOver = false;
+                document.getElementById('status').textContent = 'Ожидание завершения расстановки соперника...';
+                renderBoards();
+                if (window.sendReadyIfPossible) window.sendReadyIfPossible();
+                readyForPvP = true;
+            }
+        }
+
+        function getCellAppearance(board, hits, r, c, isEnemyField) {
+            let hitVal = hits[r][c];
+            let isShip = board[r][c] === 1;
+
+            if (hitVal === 2) {
+                return { bg: 'bg-slate-700 text-slate-400', text: '💧' };
+            }
+            if (hitVal === 1) {
+                let sunk = isShipSunk(board, hits, r, c);
+                if (sunk) {
+                    return { bg: 'bg-red-900 border-red-500 text-red-200', text: '❌' };
+                } else {
+                    return { bg: 'bg-rose-600 text-white', text: '💥' };
+                }
+            }
+            if (!isEnemyField && isShip) {
+                return { bg: 'bg-cyan-800 text-cyan-200', text: '🛳️' };
+            }
+            return { bg: 'bg-slate-800 hover:bg-slate-700', text: '' };
+        }
+
+        function renderBoards() {
+            const pEl = document.getElementById('playerBoard');
+            const eEl = document.getElementById('enemyBoard');
+            pEl.innerHTML = ''; eEl.innerHTML = '';
+
+            for (let r = 0; r < SIZE; r++) {
+                for (let c = 0; c < SIZE; c++) {
+                    const pCellData = getCellAppearance(playerBoard, enemyHits, r, c, false);
+                    const pCell = document.createElement('div');
+                    pCell.className = `w-7 h-7 sm:w-8 sm:h-8 border border-slate-600 rounded flex items-center justify-center font-bold text-xs select-none transition ${pCellData.bg}`;
+                    pCell.textContent = pCellData.text;
+                    pEl.appendChild(pCell);
+
+                    const eCellData = getCellAppearance(enemyBoard, playerHits, r, c, true);
+                    const eCell = document.createElement('div');
+                    eCell.className = `w-7 h-7 sm:w-8 sm:h-8 border border-slate-600 rounded flex items-center justify-center font-bold text-xs cursor-pointer select-none transition ${eCellData.bg}`;
+                    eCell.textContent = eCellData.text;
+                    eCell.onclick = () => handlePlayerAttack(r, c);
+                    eEl.appendChild(eCell);
+                }
+            }
+        }
+
+        function selectMode(mode) {
+            gameMode = mode;
+            startPlacement();
+        }
+
+        function handlePlayerAttack(r, c) {
+            if (gameOver || !myTurn || playerHits[r][c] !== 0) return;
+
+            if (gameMode === 'pve') {
+                if (enemyBoard[r][c] === 1) {
+                    playerHits[r][c] = 1;
+                    playSound('hit');
+                    
+                    let sunk = isShipSunk(enemyBoard, playerHits, r, c);
+                    if (sunk) {
+                        markSunkShipContour(enemyBoard, playerHits, r, c);
+                    }
+
+                    if (checkWin(enemyBoard, playerHits)) {
+                        endGame('🎉 Вы уничтожили весь флот бота!');
+                        renderBoards();
+                        return;
+                    }
+                    
+                    document.getElementById('status').textContent = sunk ? '🔥 Корабль уничтожен! Ходите снова.' : '💥 Попадание! Ходите снова.';
+                } else {
+                    playerHits[r][c] = 2;
+                    playSound('miss');
+                    myTurn = false;
+                    document.getElementById('status').textContent = '💧 Промах! Ход бота...';
+                    setTimeout(botAttack, 600);
+                }
+                renderBoards();
+            } else if (gameMode && gameMode.startsWith('pvp')) {
+                conn.send({ type: 'attack', r, c });
+                myTurn = false;
+                document.getElementById('status').textContent = 'Ожидание хода соперника...';
+            }
+        }
+
+        function botAttack() {
+            if (gameOver) return;
+            let emptyCells = [];
+            for (let r = 0; r < SIZE; r++) {
+                for (let c = 0; c < SIZE; c++) {
+                    if (enemyHits[r][c] === 0) emptyCells.push({r, c});
+                }
+            }
+            if (emptyCells.length === 0) return;
+
+            let target = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+            if (playerBoard[target.r][target.c] === 1) {
+                enemyHits[target.r][target.c] = 1;
+                playSound('hit');
+                
+                let sunk = isShipSunk(playerBoard, enemyHits, target.r, target.c);
+                if (sunk) {
+                    markSunkShipContour(playerBoard, enemyHits, target.r, target.c);
+                }
+
+                if (checkWin(playerBoard, enemyHits)) {
+                    endGame('💀 Бот уничтожил ваш флот!');
+                    renderBoards();
+                    return;
+                }
+                renderBoards();
+                setTimeout(botAttack, 600);
+            } else {
+                enemyHits[target.r][target.c] = 2;
+                playSound('miss');
+                myTurn = true;
+                document.getElementById('status').textContent = 'Бот промахнулся. Ваш ход!';
+                renderBoards();
+            }
+        }
+
+        function checkWin(board, hits) {
+            for (let r = 0; r < SIZE; r++) {
+                for (let c = 0; c < SIZE; c++) {
+                    if (board[r][c] === 1 && hits[r][c] !== 1) return false;
+                }
+            }
+            return true;
+        }
+
+        function endGame(msg) {
+            gameOver = true;
+            document.getElementById('status').textContent = msg;
+            playSound(msg.includes('победили') || msg.includes('Вы') ? 'win' : 'miss');
+            document.getElementById('gameOverButtons').classList.remove('hidden');
+        }
+
+        function restartGame() {
+            readyForPvP = false;
+            startPlacement();
+        }
+
+        function returnToMenu() {
+            if (conn) conn.close();
+            if (peer) peer.destroy();
+            gameMode = null;
+            gameOver = false;
+            readyForPvP = false;
+            document.getElementById('modeSelection').classList.remove('hidden');
+            document.getElementById('placementScreen').classList.add('hidden');
+            document.getElementById('gameBoards').classList.add('hidden');
+            document.getElementById('gameOverButtons').classList.add('hidden');
+            document.getElementById('pvpPanel').classList.add('hidden');
+            document.getElementById('status').textContent = 'Выберите режим игры';
+        }
+
+        function initPeer(callback) {
+            peer = new Peer();
+            document.getElementById('netStatus').textContent = 'Подключение к сети...';
+            peer.on('open', (id) => {
+                document.getElementById('netStatus').textContent = 'Готово к подключению!';
+                callback(id);
+            });
+            peer.on('connection', (c) => {
+                conn = c;
+                setupConnection();
+                gameMode = 'pvp-host';
+                startPlacement();
+            });
+        }
+
+        function createRoom() {
+            document.getElementById('pvpPanel').classList.remove('hidden');
+            document.getElementById('hostInfo').classList.remove('hidden');
+            document.getElementById('joinInfo').classList.add('hidden');
+            initPeer((id) => {
+                document.getElementById('myPeerId').value = id;
+            });
+        }
+
+        function showJoinInput() {
+            document.getElementById('pvpPanel').classList.remove('hidden');
+            document.getElementById('joinInfo').classList.remove('hidden');
+            document.getElementById('hostInfo').classList.add('hidden');
+        }
+
+        function joinRoom() {
+            const targetId = document.getElementById('targetPeerId').value.trim();
+            if (!targetId) return alert('Введите код комнаты!');
+            initPeer(() => {
+                conn = peer.connect(targetId);
+                setupConnection();
+                gameMode = 'pvp-client';
+                startPlacement();
+            });
+        }
+
+        function setupConnection() {
+            let opponentReady = false;
+            let myReadySent = false;
+
+            conn.on('data', (data) => {
+                if (data.type === 'ready') {
+                    opponentReady = true;
+                    if (readyForPvP) {
+                        myTurn = (gameMode === 'pvp-host');
+                        document.getElementById('status').textContent = myTurn ? 'Оба готовы! Ваш ход.' : 'Оба готовы! Ход соперника...';
+                    } else {
+                        document.getElementById('status').textContent = 'Соперник готов! Нажмите "Готово"';
+                    }
+                } else if (data.type === 'attack') {
+                    let isHit = playerBoard[data.r][data.c] === 1;
+                    enemyHits[data.r][data.c] = isHit ? 1 : 2;
+                    playSound(isHit ? 'hit' : 'miss');
+                    
+                    let sunk = isHit ? isShipSunk(playerBoard, enemyHits, data.r, data.c) : false;
+                    if (sunk) {
+                        markSunkShipContour(playerBoard, enemyHits, data.r, data.c);
+                    }
+
+                    conn.send({ type: 'result', r: data.r, c: data.c, isHit, sunk });
+                    
+                    if (checkWin(playerBoard, enemyHits)) {
+                        endGame('💀 Вы проиграли!');
+                    } else {
+                        myTurn = !isHit;
+                        document.getElementById('status').textContent = isHit 
+                            ? (sunk ? 'Соперник уничтожил ваш корабль и ходит снова!' : 'Соперник попал и ходит снова!') 
+                            : 'Соперник промахнулся! Ваш ход.';
+                    }
+                    renderBoards();
+                } else if (data.type === 'result') {
+                    playerHits[data.r][data.c] = data.isHit ? 1 : 2;
+                    playSound(data.isHit ? 'hit' : 'miss');
+
+                    if (checkWin(enemyBoard, playerHits)) {
+                        endGame('🎉 Вы победили!');
+                    } else {
+                        myTurn = data.isHit;
+                        document.getElementById('status').textContent = data.isHit 
+                            ? (data.sunk ? '🔥 Корабль уничтожен! Ходите снова.' : '💥 Попадание! Ходите снова.') 
+                            : '💧 Промах! Ход соперника...';
+                    }
+                    renderBoards();
+                }
+            });
+
+            window.sendReadyIfPossible = function() {
+                if (!myReadySent && conn) {
+                    conn.send({ type: 'ready' });
+                    myReadySent = true;
+                    if (opponentReady) {
+                        myTurn = (gameMode === 'pvp-host');
+                        document.getElementById('status').textContent = myTurn ? 'Оба готовы! Ваш ход.' : 'Оба готовы! Ход соперника...';
+                    } else {
+                        document.getElementById('status').textContent = 'Ожидание завершения расстановки соперника...';
+                    }
+                }
+            };
+
+            conn.on('close', () => {
+                alert('Соперник отключился.');
+                returnToMenu();
+            });
+        }
+    </script>
+</body>
+</html>
